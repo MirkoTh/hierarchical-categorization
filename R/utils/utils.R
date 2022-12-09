@@ -166,8 +166,8 @@ data {
   array[n_stim] int n_trials; // n trials
   array[n_stim] int n_correct; // n correct categorization responses
   array[n_stim] int cat; // actual category for a given stimulus
-  array[n_stim, n_cat] real<lower=0> d1;
-  array[n_stim, n_cat] real<lower=0> d2;
+  array[n_stim, n_cat] real<lower=0> d1;  // distances dimension 1
+  array[n_stim, n_cat] real<lower=0> d2;  // distances dimension 2
 
   int n_stim_predict;
   array[n_stim_predict] int n_trials_predict; // n trials on test set
@@ -213,6 +213,158 @@ generated quantities {
   array[n_stim_predict, n_cat] real <lower=0> sim_bs_predict;
   array[n_stim_predict] real <lower=0,upper=1> theta_predict;
 
+
+  // Similarities
+  for (i in 1:n_stim_predict) {
+    for (k in 1:n_cat) {
+      s_predict[i, k] = exp(-square(c)*(.5*square(d1_predict[i,k])+(.5)*square(d2_predict[i,k])));
+      sim_bs_predict[i, k] = s_predict[i,k] * bs[k];
+    }
+    theta_predict[i] = sim_bs_predict[i, cat_predict[i]] / sum(sim_bs_predict[i, ]);
+    log_lik_pred[i] = binomial_lpmf(n_correct_predict[i] | n_trials_predict[i], theta_predict[i]);
+  }
+
+}
+
+")
+}
+
+
+write_flexprototype_stan_file_predict <- function() {
+  write_stan_file("
+data {
+  int n_obs;
+  int n_stim;
+  int n_cat;
+  int n_dim;  // number of dimensions
+  array[n_stim] int n_trials; // n trials
+  array[n_stim] int n_correct; // n correct categorization responses
+  array[n_stim] int cat; // actual category for a given stimulus
+  // array[n_stim, n_cat] real<lower=0> d1;  // distances dimension 1
+  // array[n_stim, n_cat] real<lower=0> d2;  // distances dimension 2
+  matrix[n_obs, n_dim] y;
+  matrix[n_stim, n_dim] y_unique;
+
+  
+  int n_obs_predict;
+  int n_stim_predict;
+  array[n_stim_predict] int n_trials_predict; // n trials on test set
+  array[n_stim_predict] int n_correct_predict; // n correct categorization responses on test set
+  array[n_stim_predict] int cat_predict; // actual category for a given stimulus
+  // array[n_stim_predict, n_cat] real<lower=0> d1_predict;
+  // array[n_stim_predict, n_cat] real<lower=0> d2_predict;
+  matrix[n_obs_predict, n_dim] y_predict;
+  matrix[n_stim_predict, n_dim] y_unique_predict;
+}
+
+
+parameters {
+  real <lower=0> c;
+  //real <lower=0,upper=1> w;
+  simplex[n_cat] bs;
+  
+  ordered[n_cat] mu1; //category means dim1
+  ordered[n_cat] mu2; //category means dim2
+}
+
+transformed parameters {
+  array[n_stim, n_cat] real<lower=0> d1;  // distances dimension 1
+  array[n_stim, n_cat] real<lower=0> d2;  // distances dimension 2
+
+  
+  array[n_stim, n_cat] real <lower=0,upper=1> s;
+  array[n_stim, n_cat] real <lower=0> sim_bs;
+  array[n_stim] real <lower=0,upper=1> theta;
+
+  // Distances
+  for (st in 1:n_stim) {
+    for (k in 1:n_cat) {
+      d1[st, k] = 0;
+      d2[st, k] = 0;
+      int count1;
+      int count2;
+      count1 = 0;
+      count2 = 0;
+      for (i in 1:n_obs) {
+        if (y[i,1] == y_unique[st,1]) {
+          d1[st, k] += abs(y[i,1] - mu1[k]);
+          count1 += 1;
+        }
+        if (y[i,2] == y_unique[st,2]) {
+          d2[st, k] += abs(y[i,2] - mu2[k]);
+          count2 += 1;
+        }
+      }
+      d1[st, k] = d1[st, k] / count1;
+      d2[st, k] = d2[st, k] / count2;
+    }
+  }
+
+  // Similarities
+  for (i in 1:n_stim) {
+    for (k in 1:n_cat) {
+      s[i, k] = exp(-square(c)*(.5*square(d1[i, k])+(.5)*square(d2[i, k])));
+      sim_bs[i, k] = s[i,k] * bs[k];
+    }
+    theta[i] = sim_bs[i, cat[i]] / sum(sim_bs[i, ]);
+  }
+}
+
+model {
+  n_correct ~ binomial(n_trials, theta);
+  c ~ uniform(0, 10);
+  //w ~ beta(1, 1);
+
+  mu1[1] ~ normal(-1.5, .5);
+  mu1[2] ~ normal(0, .5);
+  mu1[3] ~ normal(1.5, .5);
+  mu2[1] ~ normal(-1.5, .5);
+  mu2[2] ~ normal(0, .5);
+  mu2[3] ~ normal(1.5, .5);
+  
+}
+
+generated quantities {
+  array[n_stim_predict, n_cat] real<lower=0> d1_predict;
+  array[n_stim_predict, n_cat] real<lower=0> d2_predict;
+  //int <lower=0> count1;
+  //int <lower=0> count2;
+  array[n_stim_predict] real log_lik_pred;
+  array[n_stim_predict, n_cat] real <lower=0,upper=1> s_predict;
+  array[n_stim_predict, n_cat] real <lower=0> sim_bs_predict;
+  array[n_stim_predict] real <lower=0,upper=1> theta_predict;
+
+  //// Distances
+  //for (i in 1:n_stim) {
+  //  for (k in 1:n_cat) {
+  //    d1_predict[i, k] = abs(y_predict[i,1] - mu1[k]);
+  //    d1_predict[i, k] = abs(y_predict[i,2] - mu2[k]);
+  //  }
+  //}
+  
+  // Distances
+  for (st in 1:n_stim_predict) {
+    for (k in 1:n_cat) {
+      d1_predict[st, k] = 0;
+      d2_predict[st, k] = 0;
+      int count1;
+      int count2;
+      count1 = 0;
+      count2 = 0;
+      for (i in 1:n_obs_predict) {
+        if (y_predict[i,1] == y_unique_predict[st,1]) {
+          d1_predict[st, k] += abs(y_predict[i,1] - mu1[k]);
+          count1 += 1;
+        }
+        if (y_predict[i,2] == y_unique_predict[st,2]) {
+          d2_predict[st, k] += abs(y_predict[i,2] - mu2[k]);
+          count2 += 1;
+        }
+      }
+      d1_predict[st, k] = d1_predict[st, k] / count1;
+      d2_predict[st, k] = d2_predict[st, k] / count2;
+    }
+  }
 
   // Similarities
   for (i in 1:n_stim_predict) {
@@ -838,6 +990,111 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
   l_vals_size <- list(c(3.5, 3.5), c(8.5, 3), c(7.5, 7.5))
   pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
 
+  return(loo_gcm)
+}
+
+bayesian_flexprototype <- function(tbl_participant, tbl_participant_agg, l_stan_params, mod_prototype) {
+  #' fit by-participant gcm stan model
+  #'
+  #' @description fit stan model, save three plots, and return loo
+  #'
+  #' @param tbl_participant by-participant by-trial responses from infpro task
+  #' @param tbl_participant_agg by-participant aggregated responses from infpro task
+  #' @param l_stan_params list with parameters used for stan model
+  #' @param mod_gcm the compiled cmdstanr model
+  #' @return loo
+  #'
+  
+  tbl_train <- tbl_participant %>% filter(session == "train")
+  tbl_transfer <- tbl_participant %>% filter(session == "transfer")
+  tbl_train_agg <- tbl_participant_agg %>% filter(session == "train")
+  tbl_transfer_agg <- tbl_participant_agg %>% filter(session == "transfer")
+  participant_sample <- tbl_train$participant[1]
+  tbl_gcm_train <- tbl_train_agg %>%
+    filter(category == response) %>%
+    mutate(prop_correct = prop_responses)
+  tbl_gcm_transfer <- tbl_transfer_agg %>%
+    filter(category == response) %>%
+    mutate(prop_correct = prop_responses)
+  
+  
+  l_data <- list(
+    # train
+    n_obs = nrow(tbl_train),
+    n_stim = nrow(tbl_gcm_train),  # tbl_gcm_train
+    n_cat = length(unique(tbl_gcm_train$category)),
+    n_dim = 2,
+    n_trials = tbl_gcm_train$n_trials,
+    n_correct = tbl_gcm_train$n_responses,
+    cat = tbl_gcm_train$category_int,
+    y = tbl_train[, c("d1i_z", "d2i_z")] %>% as.matrix(),
+    y_unique = tbl_gcm_train[, c("d1i_z", "d2i_z")] %>% as.matrix(),
+
+    # transfer / predict
+    n_obs_predict = nrow(tbl_transfer),
+    n_stim_predict = nrow(tbl_gcm_transfer),  
+    n_trials_predict = tbl_gcm_transfer$n_trials,
+    n_correct_predict = tbl_gcm_transfer$n_responses,
+    cat_predict = tbl_gcm_transfer$category_int,
+    y_predict = tbl_transfer[, c("d1i_z", "d2i_z")] %>% as.matrix(),
+    y_unique_predict = tbl_gcm_transfer[, c("d1i_z", "d2i_z")] %>% as.matrix()
+  )
+  
+  
+  fit_gcm <- mod_prototype$sample(
+    data = l_data, chains = l_stan_params$n_chains,
+    iter_sampling = l_stan_params$n_samples, iter_warmup = l_stan_params$n_warmup
+  )
+  
+  file_loc <- str_c("data/infpro_task-cat_beh/models/prototype-model-", participant_sample, ".RDS")
+  fit_gcm$save_object(file = file_loc)
+  
+  loo_gcm <- fit_gcm$loo(variables = "log_lik_pred")
+  
+  pars_interest <- c("theta_predict", "bs", "c") # , "w")
+  pars_interest_no_theta <- c("bs", "c") # , "w")
+  tbl_draws <- fit_gcm$draws(variables = pars_interest, format = "df")
+  
+  names_thetas <- names(tbl_draws)[startsWith(names(tbl_draws), "theta_predict")]
+  tbl_gcm_transfer$pred_theta <- colMeans(tbl_draws[, names_thetas])
+  tbl_gcm_transfer$pred_difference <- tbl_gcm_transfer$pred_theta - tbl_gcm_transfer$prop_responses
+  
+  
+  tbl_summary <- fit_gcm$summary(variables = c("theta", "bs", "c"))
+  tbl_summary_nok <- tbl_summary %>% filter(rhat > 1.02 | rhat < 0.98)
+  if (nrow(tbl_summary_nok) > 0) {
+    stop(str_c(
+      "participant = ", participant_sample, "; Rhat for some parameters not ok; ",
+      "model can be found under: ",
+    ))
+  }
+  tbl_summary$participant <- participant_sample
+  file_loc <- str_c("data/infpro_task-cat_beh/models/prototype-summary-", participant_sample, ".RDS")
+  saveRDS(tbl_summary, file_loc)
+  
+  idx_no_theta <- map(pars_interest_no_theta, ~ str_detect(tbl_summary$variable, .x)) %>%
+    reduce(rbind) %>%
+    colSums()
+  tbl_label <- tbl_summary[as.logical(idx_no_theta), ]
+  
+  tbl_posterior <- tbl_draws %>%
+    dplyr::select(starts_with(pars_interest_no_theta), .chain) %>%
+    rename(chain = .chain) %>%
+    pivot_longer(starts_with(pars_interest_no_theta), names_to = "parameter", values_to = "value") %>%
+    filter(parameter != "chain")
+  tbl_posterior$parameter <- fct_inorder(tbl_posterior$parameter)
+  
+  pl_thetas <- plot_item_thetas(tbl_gcm_transfer, str_c("GCM; Participant = ", participant_sample))
+  pl_posteriors <- plot_posteriors(tbl_posterior, tbl_label)
+  pl_pred_uncertainty <- plot_proportion_responses(tbl_gcm_transfer, participant_sample, color_pred_difference = TRUE)
+  
+  # save plots
+  c_names <- function(x, y) str_c("data/infpro_task-cat_beh/model-plots/", x, y, ".png")
+  l_pl_names <- map(c("prototype-thetas-", "prototype-posteriors-", "prototype-uncertainty-"), c_names, y = participant_sample)
+  l_pl <- list(pl_thetas, pl_posteriors, pl_pred_uncertainty)
+  l_vals_size <- list(c(3.5, 3.5), c(8.5, 3), c(7.5, 7.5))
+  pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
+  
   return(loo_gcm)
 }
 

@@ -1,6 +1,6 @@
 library(tidyverse)
 library(cmdstanr)
-library(rutils)
+# library(rutils)
 library(ggrepel)
 library(grid)
 library(gridExtra)
@@ -87,6 +87,7 @@ pl_train <- plot_average_categorization_accuracy(tbl_train_last, "Train")
 pl_tf <- plot_average_categorization_accuracy(tbl_transfer, "Transfer")
 marrangeGrob(list(pl_train, pl_tf), ncol = 2, nrow = 1)
 
+# Aggregate table with length = participants*categories*stimIDs
 tbl_train_agg <- aggregate_by_stimulus_and_response(tbl_stim_id, tbl_train_last)
 tbl_transfer_agg <- aggregate_by_stimulus_and_response(tbl_stim_id_transfer, tbl_transfer)
 tbl_train_agg_overall <- tbl_train_agg %>%
@@ -158,7 +159,7 @@ l_gcm_results <- map(l_loo_gcm, "result")
 map(l_loo_gcm, "error") %>% reduce(c)
 
 
-# Prototype ---------------------------------------------------------------------
+# Fixed Prototype --------------------------------------------------------------
 
 tbl_both_agg <- rbind(tbl_train_agg, tbl_transfer_agg)
 l_tbl_both_agg <- split(tbl_both_agg, tbl_both_agg$participant)
@@ -182,6 +183,39 @@ l_loo_prototype <- readRDS(file = "data/infpro_task-cat_beh/prototype-loos.RDS")
 l_prototype_results <- map(l_loo_prototype, "result")
 # not ok
 map(l_loo_prototype, "error") %>% reduce(c)
+
+
+# Flexible Prototype -----------------------------------------------------------
+
+utils_loc <- c("R/utils/plotting-utils.R", "R/utils/utils.R")
+walk(utils_loc, source)
+
+tbl_both_agg <- rbind(tbl_train_agg, tbl_transfer_agg)
+l_tbl_both_agg <- split(tbl_both_agg, tbl_both_agg$participant)
+
+l_tbl_both <- split(tbl_both, tbl_both$participant)
+
+stan_flexprototype <- write_flexprototype_stan_file_predict()
+mod_flexprototype <- cmdstan_model(stan_flexprototype, force_recompile = TRUE )
+safe_flexprototype <- safely(bayesian_flexprototype)
+
+options(warn = -1)
+l_loo_flexprototype <- furrr::future_map2(
+  l_tbl_both, l_tbl_both_agg, safe_flexprototype, 
+  l_stan_params = l_stan_params, 
+  mod_prototype = mod_flexprototype, 
+  .progress = TRUE  
+)
+
+
+options(warn = 0)
+saveRDS(l_loo_flexprototype, file = "data/infpro_task-cat_beh/flexprototype-loos.RDS")
+l_loo_flexprototype <- readRDS(file = "data/infpro_task-cat_beh/flexprototype-loos.RDS")
+
+# ok
+l_flexprototype_results <- map(l_loo_flexprototype, "result")
+# not ok
+map(l_loo_flexprototype, "error") %>% reduce(c)
 
 
 # Gaussian ----------------------------------------------------------------
@@ -235,7 +269,7 @@ map(l_loo_multi, "error") %>% reduce(c)
 safe_weights <- safely(loo_model_weights)
 
 l_loo_weights <- pmap(
-  list(l_gcm_results, l_prototype_results), # l_gaussian_results, l_multi_results 
+  list(l_gcm_results, l_gaussian_results), # l_gcm_results, l_flexprototype_results, l_gaussian_results, l_multi_results 
   ~ safe_weights(list(..1, ..2)), #, , ..3
   method = "stacking"
 )
@@ -253,6 +287,7 @@ ggplot(tbl_weights, aes(weight_prototype)) +
   labs(x = "Model Weight Prototype Model", y = "Nr. Participants")
 
 saveRDS(tbl_weights, file = "data/infpro_task-cat_beh/model-weights.rds")
+
 
 # Distribution of Model Parameters ----------------------------------------
 
