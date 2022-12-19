@@ -1,6 +1,6 @@
 library(tidyverse)
 library(cmdstanr)
-# library(rutils)
+library(rutils)
 library(ggrepel)
 library(grid)
 library(gridExtra)
@@ -269,7 +269,7 @@ map(l_loo_multi, "error") %>% reduce(c)
 safe_weights <- safely(loo_model_weights)
 
 l_loo_weights <- pmap(
-  list(l_gcm_results, l_gaussian_results), # l_gcm_results, l_flexprototype_results, l_gaussian_results, l_multi_results 
+  list(l_gcm_results, l_gaussian_results), # l_multi_results, l_flexprototype_results, l_gaussian_results, l_multi_results 
   ~ safe_weights(list(..1, ..2)), #, , ..3
   method = "stacking"
 )
@@ -281,6 +281,8 @@ tbl_weights <- tibble(
   participant = participants,
   weight_prototype = v_weights
 )
+
+
 ggplot(tbl_weights, aes(weight_prototype)) + 
   geom_histogram(fill = "#66CCFF", color = "white") +
   theme_bw() +
@@ -288,6 +290,34 @@ ggplot(tbl_weights, aes(weight_prototype)) +
 
 saveRDS(tbl_weights, file = "data/infpro_task-cat_beh/model-weights.rds")
 
+
+# color weights according to train/transfer performance
+tbl_transfer_participant_avg <- tbl_transfer_agg %>% 
+  filter(category == response) %>%
+  group_by(participant) %>%
+  summarise(n_trials = sum(n_trials), n_responses = sum(n_responses)) %>%
+  ungroup() %>%
+  mutate(
+    prop_correct = n_responses / n_trials,
+    participant = as.character(participant)
+  )
+
+tbl_weights <- tbl_weights %>% 
+  left_join(tbl_transfer_participant_avg, by = "participant")
+
+ggplot(tbl_weights, aes(weight_prototype, group = prop_correct)) + 
+  geom_histogram(color = "white", aes(fill = prop_correct)) +
+  theme_bw() +
+  scale_fill_gradient(low = "#FF6600", high = "#009966") +
+  labs(x = "Model Weight Prototype Model", y = "Nr. Participants")
+
+ggplot(tbl_weights, aes(weight_prototype, prop_correct)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = .33, linetype = "dotdash", color = "grey88", size = .75) +
+  coord_cartesian(ylim = c(.3, .9)) +
+  theme_bw() +
+  labs(x = "Model Weight Prototype Model", y = "Prop. Correct Transfer")
 
 # Distribution of Model Parameters ----------------------------------------
 
