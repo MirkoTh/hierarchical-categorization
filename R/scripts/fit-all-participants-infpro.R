@@ -54,6 +54,10 @@ saveRDS(tbl_both, file = "data/infpro_task-cat_beh/tbl_both.RDS")
 saveRDS(tbl_train, file = "data/infpro_task-cat_beh/tbl_train.RDS")
 saveRDS(tbl_transfer, file = "data/infpro_task-cat_beh/tbl_transfer.RDS")
 
+write_csv(tbl_train, file = "data/infpro_task-cat_beh/tbl_train.csv")
+write_csv(tbl_transfer, file = "data/infpro_task-cat_beh/tbl_transfer.csv")
+write_csv(tbl_both, file = "data/infpro_task-cat_beh/tbl_both.csv")
+
 tbl_stim_id <- tbl_train %>% count(d1i, d2i, d1i_z, d2i_z, category) %>%
   arrange(d1i, d2i) %>% mutate(stim_id = seq_along(d1i + d2i)) %>%
   dplyr::select(-n)
@@ -408,4 +412,20 @@ tbl_biases %>%
   geom_point() +
   facet_wrap(~ variable) +
   theme_bw()
+
+
+
+
+# Compare Model Weights to C Parameter of RMC -----------------------------
+
+tbl_rmc <- read_csv("data/infpro_task-cat_beh/tbl-results-transfer.csv")
+tbl_cs <- tbl_rmc %>% filter(rank == 1) %>% mutate(participant = as.character(id))
+
+
+tbl_cs <- tbl_cs %>% left_join(tbl_weights, by = "participant")
+ggplot(tbl_cs, aes(weight_prototype, c)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", se = TRUE, alpha = .1) +
+  theme_bw() +
+  labs(x = "Model Weight Prototype", y = "Coupling Parameter RMC")
 
