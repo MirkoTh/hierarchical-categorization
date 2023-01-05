@@ -440,3 +440,12 @@ ggplot(tbl_cs_long, aes(weight_prototype, Value, group = Metric)) +
   scale_color_viridis_d() +
   theme_bw() +
   labs(x = "Model Weight Prototype", y = "RMC Metric")
+
+
+ggplot(tbl_cs, aes(c)) + 
+  geom_histogram(binwidth = .015, fill = "#66CCFF", color = "white") +
+  theme_bw() +
+  scale_y_continuous(breaks = seq(0, 15, by = 5)) +
+  labs(x = "c parameter of RMC", y = "Nr. Participants") +
+  coord_cartesian(xlim = c(0, 1))
+  
