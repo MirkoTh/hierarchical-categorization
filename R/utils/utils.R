@@ -1581,7 +1581,7 @@ lookup_table_possible_responses <- function(tbl_completion, tbl_model_based, p_i
     select(cue_val) %>%
     ungroup()
   tbl_design <- crossing(
-    cue_val = unique(tbl_cues$cue_val), resp_i = seq(0, 10, by = .05)
+    cue_val = unique(tbl_cues$cue_val), resp_i = seq(-5, 15, by = .05)
   )
   tbl_design <- tbl_design %>% left_join(tbl_cues, by = "cue_val")
   tbl_lookup <- tbl_model_based %>%
