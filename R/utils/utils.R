@@ -4,7 +4,7 @@ distance_gcm <- function(i, tbl_x, r) {
   colnames(m) <- c("x1", "x2")
   tbl_single <- as_tibble(m)
   ((tbl_single$x1 - tbl_x$x1)^r +
-    (tbl_single$x2 - tbl_x$x2)^r
+      (tbl_single$x2 - tbl_x$x2)^r
   )^(1 / r)
 }
 
@@ -643,13 +643,13 @@ gcm_distances_similarities <- function(tbl_df, l_params) {
     unlist() %>%
     matrix(byrow = TRUE, nrow = nrow(tbl_df), ncol = nrow(tbl_df))
   m_similarities <- exp(-l_params[["c"]]^2 * (l_params[["w"]] * m_distances_x1^2 + (1 - l_params[["w"]]) * m_distances_x2^2))
-
+  
   l_dist_sim <- list(
     m_distances_x1 = m_distances_x1,
     m_distances_x2 = m_distances_x2,
     m_similarities = m_similarities
   )
-
+  
   return(l_dist_sim)
 }
 
@@ -672,10 +672,10 @@ gcm_response_probabilities <- function(i, tbl_df, m_sims, l_params) {
     l_mask <- map(cats_distinct, ~ tbl_df$category == .x)
     map_dbl(l_mask, ~ sum(m_sims[i, ][.x]))
   }
-
+  
   sum_sim_categories <- sum_sim_category(i, tbl_df)
   sum_sim_biased <- sum_sim_categories * l_params[["b"]]
-
+  
   sum_sim_biased[tbl_df$category[i]] / sum(sum_sim_biased)
 }
 
@@ -697,7 +697,7 @@ aggregate_by_stimulus_and_response <- function(tbl_stim_id, tbl_df) {
   #' @param tbl_df tbl df with all category learning training data
   #' @return aggregated tbl df
   #'
-
+  
   session <- tbl_df$session[1]
   tbl_design <- tbl_stim_id %>%
     crossing(
@@ -705,13 +705,13 @@ aggregate_by_stimulus_and_response <- function(tbl_stim_id, tbl_df) {
       participant = unique(tbl_df$participant)
     ) %>%
     relocate(stim_id, .before = category)
-
+  
   tbl_train_agg <- tbl_df %>%
     group_by(participant, session, stim_id, d1i, d2i, d1i_z, d2i_z, category, response) %>%
     summarize(
       n_responses = n()
     )
-
+  
   tbl_ <- tbl_design %>%
     left_join(
       tbl_train_agg,
@@ -719,7 +719,7 @@ aggregate_by_stimulus_and_response <- function(tbl_stim_id, tbl_df) {
         "participant", "stim_id", "d1i", "d2i", "d1i_z", "d2i_z", "category", "response"
       )
     )
-
+  
   tbl_$n_responses[is.na(tbl_$n_responses)] <- 0
   tbl_$session[is.na(tbl_$session)] <- session
   tbl_ %>%
@@ -750,7 +750,7 @@ bayesian_gcm <- function(tbl_participant, l_stan_params, mod_gcm) {
   #' @param mod_gcm the compiled cmdstanr model
   #' @return loo
   #'
-
+  
   tbl_train <- tbl_participant %>% filter(session == "train")
   tbl_transfer <- tbl_participant %>% filter(session == "transfer")
   participant_sample <- tbl_train$participant[1]
@@ -760,7 +760,7 @@ bayesian_gcm <- function(tbl_participant, l_stan_params, mod_gcm) {
   tbl_gcm_transfer <- tbl_transfer %>%
     filter(category == response) %>%
     mutate(prop_correct = prop_responses)
-
+  
   # compute pairwise distances
   m_distances_x1_train <- map(1:nrow(tbl_gcm_train), distance_1d, tbl_gcm_train, "d1i_z") %>%
     unlist() %>%
@@ -768,14 +768,14 @@ bayesian_gcm <- function(tbl_participant, l_stan_params, mod_gcm) {
   m_distances_x2_train <- map(1:nrow(tbl_gcm_train), distance_1d, tbl_gcm_train, "d2i_z") %>%
     unlist() %>%
     matrix(byrow = TRUE, nrow = nrow(tbl_gcm_train), ncol = nrow(tbl_gcm_train))
-
+  
   m_distances_x1_transfer <- map(1:nrow(tbl_gcm_transfer), distance_1d, tbl_gcm_transfer, "d1i_z") %>%
     unlist() %>%
     matrix(byrow = TRUE, nrow = nrow(tbl_gcm_transfer), ncol = nrow(tbl_gcm_transfer))
   m_distances_x2_transfer <- map(1:nrow(tbl_gcm_transfer), distance_1d, tbl_gcm_transfer, "d2i_z") %>%
     unlist() %>%
     matrix(byrow = TRUE, nrow = nrow(tbl_gcm_transfer), ncol = nrow(tbl_gcm_transfer))
-
+  
   l_data <- list(
     # train
     n_stim = nrow(tbl_gcm_train),
@@ -793,26 +793,26 @@ bayesian_gcm <- function(tbl_participant, l_stan_params, mod_gcm) {
     d1_predict = m_distances_x1_transfer,
     d2_predict = m_distances_x2_transfer
   )
-
+  
   fit_gcm <- mod_gcm$sample(
     data = l_data, chains = l_stan_params$n_chains,
     iter_sampling = l_stan_params$n_samples, iter_warmup = l_stan_params$n_warmup
   )
-
+  
   file_loc <- str_c("data/infpro_task-cat_beh/models/gcm-model-", participant_sample, ".RDS")
   fit_gcm$save_object(file = file_loc)
-
+  
   loo_gcm <- fit_gcm$loo(variables = "log_lik_pred")
-
+  
   pars_interest <- c("theta_predict", "bs", "c") # , "w")
   pars_interest_no_theta <- c("bs", "c") # , "w")
   tbl_draws <- fit_gcm$draws(variables = pars_interest, format = "df")
-
+  
   names_thetas <- names(tbl_draws)[startsWith(names(tbl_draws), "theta_predict")]
   tbl_gcm_transfer$pred_theta <- colMeans(tbl_draws[, names_thetas])
   tbl_gcm_transfer$pred_difference <- tbl_gcm_transfer$pred_theta - tbl_gcm_transfer$prop_responses
-
-
+  
+  
   tbl_summary <- fit_gcm$summary(variables = c("theta", "bs", "c"))
   tbl_summary_nok <- tbl_summary %>% filter(rhat > 1.02 | rhat < 0.98)
   if (nrow(tbl_summary_nok) > 0) {
@@ -824,30 +824,30 @@ bayesian_gcm <- function(tbl_participant, l_stan_params, mod_gcm) {
   tbl_summary$participant <- participant_sample
   file_loc <- str_c("data/infpro_task-cat_beh/models/gcm-summary-", participant_sample, ".RDS")
   saveRDS(tbl_summary, file_loc)
-
+  
   idx_no_theta <- map(pars_interest_no_theta, ~ str_detect(tbl_summary$variable, .x)) %>%
     reduce(rbind) %>%
     colSums()
   tbl_label <- tbl_summary[as.logical(idx_no_theta), ]
-
+  
   tbl_posterior <- tbl_draws %>%
     dplyr::select(starts_with(pars_interest_no_theta), .chain) %>%
     rename(chain = .chain) %>%
     pivot_longer(starts_with(pars_interest_no_theta), names_to = "parameter", values_to = "value") %>%
     filter(parameter != "chain")
   tbl_posterior$parameter <- fct_inorder(tbl_posterior$parameter)
-
+  
   pl_thetas <- plot_item_thetas(tbl_gcm_transfer, str_c("GCM; Participant = ", participant_sample))
   pl_posteriors <- plot_posteriors(tbl_posterior, tbl_label)
   pl_pred_uncertainty <- plot_proportion_responses(tbl_gcm_transfer, participant_sample, color_pred_difference = TRUE)
-
+  
   # save plots
   c_names <- function(x, y) str_c("data/infpro_task-cat_beh/model-plots/", x, y, ".png")
   l_pl_names <- map(c("gcm-thetas-", "gcm-posteriors-", "gcm-uncertainty-"), c_names, y = participant_sample)
   l_pl <- list(pl_thetas, pl_posteriors, pl_pred_uncertainty)
   l_vals_size <- list(c(3.5, 3.5), c(8.5, 3), c(7.5, 7.5))
   pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
-
+  
   return(loo_gcm)
 }
 
@@ -861,7 +861,7 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
   #' @param mod_gcm the compiled cmdstanr model
   #' @return loo
   #'
-
+  
   tbl_train <- tbl_participant %>% filter(session == "train")
   tbl_transfer <- tbl_participant %>% filter(session == "transfer")
   participant_sample <- tbl_train$participant[1]
@@ -871,7 +871,7 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
   tbl_gcm_transfer <- tbl_transfer %>%
     filter(category == response) %>%
     mutate(prop_correct = prop_responses)
-
+  
   tbl_prototypes <- tbl_gcm_train %>%
     group_by(category) %>%
     summarise(
@@ -879,7 +879,7 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
       pt1_z = mean(d1i_z), pt2_z = mean(d2i_z)
     ) %>%
     rename(pt_cat = category)
-
+  
   # compute 1D distances between stimuli and prototypes
   tbl_prototype_dist_train <- tbl_gcm_train %>%
     left_join(tbl_prototypes, by = character()) %>%
@@ -889,7 +889,7 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
     ) %>%
     select(stim_id, pt_cat, dist1_z, dist2_z) %>%
     pivot_wider(names_from = "pt_cat", values_from = c(dist1_z, dist2_z))
-
+  
   tbl_prototype_dist_transfer <- tbl_gcm_transfer %>%
     left_join(tbl_prototypes, by = character()) %>%
     mutate(
@@ -898,7 +898,7 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
     ) %>%
     select(stim_id, pt_cat, dist1_z, dist2_z) %>%
     pivot_wider(names_from = "pt_cat", values_from = c(dist1_z, dist2_z))
-
+  
   # Save prototype distances as matrices
   m_distances_x1_train <- tbl_prototype_dist_train %>%
     select(starts_with("dist1_z")) %>%
@@ -916,8 +916,8 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
     select(starts_with("dist2_z")) %>%
     as.matrix() %>%
     unname()
-
-
+  
+  
   l_data <- list(
     # train
     n_stim = nrow(tbl_gcm_train),
@@ -935,26 +935,26 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
     d1_predict = m_distances_x1_transfer,
     d2_predict = m_distances_x2_transfer
   )
-
+  
   fit_gcm <- mod_prototype$sample(
     data = l_data, chains = l_stan_params$n_chains,
     iter_sampling = l_stan_params$n_samples, iter_warmup = l_stan_params$n_warmup
   )
-
+  
   file_loc <- str_c("data/infpro_task-cat_beh/models/prototype-model-", participant_sample, ".RDS")
   fit_gcm$save_object(file = file_loc)
-
+  
   loo_gcm <- fit_gcm$loo(variables = "log_lik_pred")
-
+  
   pars_interest <- c("theta_predict", "bs", "c") # , "w")
   pars_interest_no_theta <- c("bs", "c") # , "w")
   tbl_draws <- fit_gcm$draws(variables = pars_interest, format = "df")
-
+  
   names_thetas <- names(tbl_draws)[startsWith(names(tbl_draws), "theta_predict")]
   tbl_gcm_transfer$pred_theta <- colMeans(tbl_draws[, names_thetas])
   tbl_gcm_transfer$pred_difference <- tbl_gcm_transfer$pred_theta - tbl_gcm_transfer$prop_responses
-
-
+  
+  
   tbl_summary <- fit_gcm$summary(variables = c("theta", "bs", "c"))
   tbl_summary_nok <- tbl_summary %>% filter(rhat > 1.02 | rhat < 0.98)
   if (nrow(tbl_summary_nok) > 0) {
@@ -966,30 +966,30 @@ bayesian_prototype <- function(tbl_participant, l_stan_params, mod_prototype) {
   tbl_summary$participant <- participant_sample
   file_loc <- str_c("data/infpro_task-cat_beh/models/prototype-summary-", participant_sample, ".RDS")
   saveRDS(tbl_summary, file_loc)
-
+  
   idx_no_theta <- map(pars_interest_no_theta, ~ str_detect(tbl_summary$variable, .x)) %>%
     reduce(rbind) %>%
     colSums()
   tbl_label <- tbl_summary[as.logical(idx_no_theta), ]
-
+  
   tbl_posterior <- tbl_draws %>%
     dplyr::select(starts_with(pars_interest_no_theta), .chain) %>%
     rename(chain = .chain) %>%
     pivot_longer(starts_with(pars_interest_no_theta), names_to = "parameter", values_to = "value") %>%
     filter(parameter != "chain")
   tbl_posterior$parameter <- fct_inorder(tbl_posterior$parameter)
-
+  
   pl_thetas <- plot_item_thetas(tbl_gcm_transfer, str_c("GCM; Participant = ", participant_sample))
   pl_posteriors <- plot_posteriors(tbl_posterior, tbl_label)
   pl_pred_uncertainty <- plot_proportion_responses(tbl_gcm_transfer, participant_sample, color_pred_difference = TRUE)
-
+  
   # save plots
   c_names <- function(x, y) str_c("data/infpro_task-cat_beh/model-plots/", x, y, ".png")
   l_pl_names <- map(c("prototype-thetas-", "prototype-posteriors-", "prototype-uncertainty-"), c_names, y = participant_sample)
   l_pl <- list(pl_thetas, pl_posteriors, pl_pred_uncertainty)
   l_vals_size <- list(c(3.5, 3.5), c(8.5, 3), c(7.5, 7.5))
   pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
-
+  
   return(loo_gcm)
 }
 
@@ -1029,7 +1029,7 @@ bayesian_flexprototype <- function(tbl_participant, tbl_participant_agg, l_stan_
     cat = tbl_gcm_train$category_int,
     y = tbl_train[, c("d1i_z", "d2i_z")] %>% as.matrix(),
     y_unique = tbl_gcm_train[, c("d1i_z", "d2i_z")] %>% as.matrix(),
-
+    
     # transfer / predict
     n_obs_predict = nrow(tbl_transfer),
     n_stim_predict = nrow(tbl_gcm_transfer),  
@@ -1109,13 +1109,13 @@ bayesian_gaussian_naive_bayes <- function(tbl_participant, tbl_participant_agg, 
   #' @param mod_gaussian the compiled cmdstanr model
   #' @return loo
   #'
-
+  
   tbl_train <- tbl_participant %>% filter(session == "train")
   tbl_participant_agg <- tbl_participant_agg %>%
     filter(response == category & session == "transfer") %>%
     mutate(prop_correct = prop_responses)
   participant_sample <- tbl_train$participant[1]
-
+  
   l_data <- list(
     D = 2, K = length(unique(tbl_train$category)),
     N = nrow(tbl_train),
@@ -1136,27 +1136,27 @@ bayesian_gaussian_naive_bayes <- function(tbl_participant, tbl_participant_agg, 
     "data/infpro_task-cat_beh/models/gaussian-model-", participant_sample, ".RDS"
   )
   fit_gaussian$save_object(file = file_loc)
-
+  
   # loo
   loo_gaussian <- fit_gaussian$loo(variables = "log_lik_pred")
-
+  
   pars_interest <- c("mu1", "mu2", "sigma", "theta", "cat_prior")
   pars_interest_no_theta <- c("mu1", "mu2", "sigma", "cat_prior")
   tbl_draws <- fit_gaussian$draws(variables = pars_interest, format = "df")
   tbl_draws <- tbl_draws %>% rename(`mu2[1]` = `mu2[3]`, `mu2[3]` = `mu2[1]`)
-
+  
   names_thetas <- names(tbl_draws)[startsWith(names(tbl_draws), "theta")]
   tbl_participant_agg$pred_theta <- colMeans(tbl_draws[, names_thetas])
   tbl_participant_agg$pred_difference <- tbl_participant_agg$pred_theta - tbl_participant_agg$prop_responses
-
-
+  
+  
   tbl_summary <- fit_gaussian$summary(variables = pars_interest)
   # rename to correct for reverse ordering in stan model
   old_3 <- tbl_summary$variable == "mu2[3]"
   old_1 <- tbl_summary$variable == "mu2[1]"
   tbl_summary$variable[old_3] <- "mu2[1]"
   tbl_summary$variable[old_1] <- "mu2[3]"
-
+  
   tbl_summary_nok <- tbl_summary %>% filter(rhat > 1.02 | rhat < 0.98)
   if (nrow(tbl_summary_nok) > 0) {
     stop(str_c(
@@ -1164,27 +1164,27 @@ bayesian_gaussian_naive_bayes <- function(tbl_participant, tbl_participant_agg, 
       "model can be found under: ", file_loc
     ))
   }
-
+  
   tbl_summary$participant <- participant_sample
   file_loc <- str_c("data/infpro_task-cat_beh/models/gaussian-summary-", participant_sample, ".RDS")
   saveRDS(tbl_summary, file_loc)
-
+  
   idx_no_theta <- map(pars_interest_no_theta, ~ str_detect(tbl_summary$variable, .x)) %>%
     reduce(rbind) %>%
     colSums()
   tbl_label <- tbl_summary[as.logical(idx_no_theta), ]
-
+  
   tbl_posterior <- tbl_draws %>%
     dplyr::select(starts_with(pars_interest_no_theta), .chain) %>%
     rename(chain = .chain) %>%
     pivot_longer(starts_with(pars_interest_no_theta), names_to = "parameter", values_to = "value") %>%
     filter(parameter != "chain")
   tbl_posterior$parameter <- fct_inorder(tbl_posterior$parameter)
-
+  
   pl_thetas <- plot_item_thetas(tbl_participant_agg, str_c("Gaussian 1D; Participant = ", participant_sample))
   pl_posteriors <- plot_posteriors(tbl_posterior, tbl_label, n_cols = 3)
   pl_pred_uncertainty <- plot_proportion_responses(tbl_participant_agg, participant_sample, color_pred_difference = TRUE)
-
+  
   # save plots
   c_names <- function(x, y) str_c("data/infpro_task-cat_beh/model-plots/", x, y, ".png")
   l_pl_names <- map(
@@ -1195,7 +1195,7 @@ bayesian_gaussian_naive_bayes <- function(tbl_participant, tbl_participant_agg, 
   l_pl <- list(pl_thetas, pl_posteriors, pl_pred_uncertainty)
   l_vals_size <- list(c(3.5, 3.5), c(7.5, 8.5), c(7.5, 7.5))
   pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
-
+  
   return(loo_gaussian)
 }
 
@@ -1211,13 +1211,13 @@ bayesian_gaussian_multi_bayes <- function(tbl_participant, tbl_participant_agg, 
   #' @param mod_multi the compiled cmdstanr model
   #' @return loo
   #'
-
+  
   tbl_train <- tbl_participant %>% filter(session == "train")
   tbl_participant_agg <- tbl_participant_agg %>%
     filter(response == category & session == "transfer") %>%
     mutate(prop_correct = prop_responses)
   participant_sample <- tbl_train$participant[1]
-
+  
   l_data <- list(
     D = 2, K = length(unique(tbl_train$category)),
     N = nrow(tbl_train),
@@ -1238,11 +1238,11 @@ bayesian_gaussian_multi_bayes <- function(tbl_participant, tbl_participant_agg, 
     "data/infpro_task-cat_beh/models/multi-model-", participant_sample, ".RDS"
   )
   fit_multi$save_object(file = file_loc)
-
+  
   # loo
   loo_multi <- fit_multi$loo(variables = "log_lik_pred")
-
-
+  
+  
   pars_interest <- c("mu", "Sigma", "theta", "cat_prior")
   tbl_draws <- fit_multi$draws(variables = pars_interest, format = "df")
   names_params <- names(tbl_draws)
@@ -1253,13 +1253,13 @@ bayesian_gaussian_multi_bayes <- function(tbl_participant, tbl_participant_agg, 
   names_sigmas_keep <- names_sigmas[as.logical(abs(sigmas_keep - 1))]
   pars_interest_no_theta <- c("mu", names_sigmas_keep, "cat_prior")
   pars_interest_no_theta_idx <- str_replace(pars_interest_no_theta, "\\[", "\\\\[")
-
-
+  
+  
   names_thetas <- names(tbl_draws)[startsWith(names(tbl_draws), "theta")]
   tbl_participant_agg$pred_theta <- colMeans(tbl_draws[, names_thetas])
   tbl_participant_agg$pred_difference <- tbl_participant_agg$pred_theta - tbl_participant_agg$prop_responses
-
-
+  
+  
   tbl_summary <- fit_multi$summary(variables = pars_interest)
   tbl_summary_nok <- tbl_summary %>% filter(rhat > 1.02 | rhat < 0.98)
   if (nrow(tbl_summary_nok) > 0) {
@@ -1268,30 +1268,30 @@ bayesian_gaussian_multi_bayes <- function(tbl_participant, tbl_participant_agg, 
       "model can be found under: ", file_loc
     ))
   }
-
+  
   tbl_summary$participant <- participant_sample
   file_loc <- str_c("data/infpro_task-cat_beh/models/multi-model-summary-", participant_sample, ".RDS")
   saveRDS(tbl_summary, file_loc)
-
+  
   idx_no_theta <- map(pars_interest_no_theta_idx, ~ str_detect(tbl_summary$variable, .x)) %>%
     reduce(rbind) %>%
     colSums()
   tbl_label <- tbl_summary[as.logical(idx_no_theta), ]
-
+  
   tbl_posterior <- tbl_draws %>%
     dplyr::select(starts_with(pars_interest_no_theta), .chain) %>%
     rename(chain = .chain) %>%
     pivot_longer(starts_with(pars_interest_no_theta), names_to = "parameter", values_to = "value") %>%
     filter(parameter != "chain")
   tbl_posterior$parameter <- fct_inorder(tbl_posterior$parameter)
-
-
+  
+  
   pl_thetas <- plot_item_thetas(tbl_participant_agg, str_c("MV Gaussian; Participant = ", participant_sample))
   pl_posteriors <- plot_posteriors(tbl_posterior, tbl_label, n_cols = 5)
   pl_pred_uncertainty <- plot_proportion_responses(tbl_participant_agg, participant_sample, color_pred_difference = TRUE)
-
-
-
+  
+  
+  
   # save plots
   c_names <- function(x, y) str_c("data/infpro_task-cat_beh/model-plots/", x, y, ".png")
   l_pl_names <- map(
@@ -1302,7 +1302,7 @@ bayesian_gaussian_multi_bayes <- function(tbl_participant, tbl_participant_agg, 
   l_pl <- list(pl_thetas, pl_posteriors, pl_pred_uncertainty)
   l_vals_size <- list(c(3.5, 3.5), c(11, 5.5), c(7.5, 7.5))
   pwalk(list(l_pl, l_pl_names, l_vals_size), save_my_png)
-
+  
   return(loo_multi)
 }
 
@@ -1368,18 +1368,18 @@ max_sim_response <- function(i_cue, i_cat, i_dim, post_c, l_tbl_lookup, l_tbl_ex
   # then compute the similarities to all exemplars from all available values on the grid
   rows_selected <- as.logical(l_tbl_lookup[[i_cat]][, i_dim] == cue)
   grid_vals <- l_tbl_lookup[[i_cat]][rows_selected, ]
-
+  
   sum_within_category_similarity <- function(x1, x2, c, tbl_df) {
     sum(map_dbl(c, ~ sum(exp(-.x^2 * ((x1 - tbl_df$d1i_z)^2 + (x2 - tbl_df$d2i_z)^2)))))
   }
-
+  
   idx_min <- which.max(map2_dbl(
     grid_vals$d1i_z, grid_vals$d2i_z,
     sum_within_category_similarity,
     c = as.list(post_c$c),
     tbl_df = l_tbl_exemplars[[i_cat]]
   ))
-
+  
   return(tibble(grid_vals[idx_min, ], cue_dim = i_dim))
 }
 
@@ -1396,7 +1396,7 @@ varied_cues <- function(tbl_df) {
   dim_cued <- names(tbl_df_filtered)[2]
   if (dim_cued == "d1i_z") dim_response <- "d2i_z"
   if (dim_cued == "d2i_z") dim_response <- "d1i_z"
-
+  
   tbl_cross <- crossing(
     dim_cued = c(unique(tbl_df_filtered[, dim_cued]) %>% as_vector(), seq(min(tbl_df_filtered[, dim_cued]), max(tbl_df_filtered[, dim_cued]), by = .1)),
     dim_response = seq(-1.5, 1.5, by = .05)
@@ -1420,13 +1420,13 @@ load_parameter_posteriors <- function(p_id) {
   m_pt <- readRDS(file_loc_gaussian)
   post_c <- m_gcm$draws(variables = "c", format = "df") %>% as_tibble()
   post_pts <- m_pt$draws(variables = c("mu1", "mu2"), format = "df")
-
+  
   return(list(gcm = post_c, gaussian = post_pts))
 }
 
 
 
-model_based_inference_responses <- function(tbl_completion, tbl_train, p_id, l_pars_tf) {
+model_based_inference_responses_gcm <- function(tbl_completion, tbl_train, p_id, l_pars_tf) {
   #' model-based inferences given gcm model posteriors
   #'
   #' @description computes inference responses that maximize within-category
@@ -1439,7 +1439,7 @@ model_based_inference_responses <- function(tbl_completion, tbl_train, p_id, l_p
   #' @return list containing tbl dfs with maximally similar responses
   #' for all categories and cues
   #'
-
+  
   # all the exemplars observed during training that can be referred to in memory
   l_tbl_exemplars <- tbl_train %>%
     mutate(category = fct_recode(category, B = "C", C = "B")) %>%
@@ -1448,11 +1448,11 @@ model_based_inference_responses <- function(tbl_completion, tbl_train, p_id, l_p
     count() %>%
     select(-n) %>%
     split(.$category)
-
+  
   # load posterior samples
   l_posteriors <- load_parameter_posteriors(p_id)
   post_c <- l_posteriors$gcm
-
+  
   # get unique inference cues and bring them in format to compute model-based responses
   l_tbl_cues <- tbl_completion %>%
     mutate(cue_val_dupl = cue_val, cuedim_dupl = cuedim) %>%
@@ -1473,12 +1473,12 @@ model_based_inference_responses <- function(tbl_completion, tbl_train, p_id, l_p
     count() %>%
     select(-n) %>%
     split(.$category)
-
+  
   # expand the not-varied dimension as a grid for a given participant
   l_tbl_lookup <- map(l_tbl_cues, varied_cues)
-
+  
   tbl_cat_dim <- crossing(i_cat = c("A", "B"), i_dim = names(l_tbl_lookup$A)[1])
-
+  
   l_closest <- pmap(
     tbl_cat_dim,
     max_sim_responses,
@@ -1488,11 +1488,103 @@ model_based_inference_responses <- function(tbl_completion, tbl_train, p_id, l_p
     l_tbl_cues = l_tbl_cues
   )
   names(l_closest) <- tbl_cat_dim$i_cat
-
+  
   return(l_closest)
 }
 
-distance_from_model_based_inference <- function(p_id, tbl_completion, tbl_train, l_pars_tf) {
+
+
+model_based_inference_responses_gaussian <- function(tbl_completion, tbl_train, p_id, l_pars_tf) {
+  #' model-based inferences given Gaussian prototype model posteriors
+  #'
+  #' @description computes inference responses that minimize distances
+  #' to representational prototype given posterior distributions of pts
+  #'
+  #' @param tbl_completion empirical completion data
+  #' @param tbl_train empirical category learning data from training
+  #' @param p_id participant id
+  #' @param l_pars_tf means and sds in untransformed space
+  #' @return list containing tbl dfs with maximally similar responses
+  #' for all categories and cues
+  #'
+  
+  # all the exemplars observed during training that can be referred to in memory
+  l_tbl_exemplars <- tbl_train %>%
+    mutate(category = fct_recode(category, B = "C", C = "B")) %>%
+    filter(participant == p_id) %>%
+    group_by(category, d1i_z, d2i_z) %>%
+    count() %>%
+    select(-n) %>%
+    split(.$category)
+  
+  # load posterior samples
+  l_posteriors <- load_parameter_posteriors(p_id)
+  post_gaussian <- l_posteriors$gaussian
+  post_gaussian <- post_gaussian %>% rename(`mu2[1]` = `mu2[3]`, `mu2[3]` = `mu2[1]`) %>% select(-c(.chain, .iteration, .draw, `mu1[2]`, `mu2[2]`))
+  post_gaussian_mns <- apply(post_gaussian, 2, mean)
+  idx_c1 <- str_detect(names(post_gaussian_mns), "\\[1\\]")
+  idx_c3 <- str_detect(names(post_gaussian_mns), "\\[3\\]")
+  
+  
+  # get unique inference cues and bring them in format to compute model-based responses
+  l_tbl_cues <- tbl_completion %>%
+    mutate(cue_val_dupl = cue_val, cuedim_dupl = cuedim) %>%
+    pivot_wider(
+      id_cols = c(participant, category, cuedim_dupl, cue_val_dupl, respdim, rep, resp_i),
+      names_from = cuedim, values_from = cue_val, names_glue = "{cuedim}_{.value}"
+    ) %>%
+    mutate(
+      d1i_z = (`1_cue_val` - l_pars_tf$mean_d1i) / l_pars_tf$sd_d1i,
+      d2i_z = (`2_cue_val` - l_pars_tf$mean_d2i) / l_pars_tf$sd_d2i,
+    ) %>%
+    filter(participant == p_id) %>%
+    select(-c(
+      participant, cuedim_dupl, cue_val_dupl, respdim,
+      rep, resp_i, `1_cue_val`, `2_cue_val`
+    )) %>%
+    group_by(category, d1i_z, d2i_z) %>%
+    count() %>%
+    select(-n) %>%
+    split(.$category)
+  
+  # expand the not-varied dimension as a grid for a given participant
+  l_tbl_lookup <- map(l_tbl_cues, varied_cues)
+  tbl_cat_dim <- crossing(i_cat = c("A", "B"), i_dim = names(l_tbl_lookup$A)[1])
+  
+  
+  tbl_pts <- data.frame(rbind(
+    post_gaussian_mns[idx_c1],
+    post_gaussian_mns[idx_c3]
+  )) %>% as_tibble()
+  colnames(tbl_pts) <- c("d1i_z", "d2i_z")
+  tbl_pts$category <- c("A", "B")
+  
+  
+  closest_response_to_prototype <- function(i_cat, i_dim, l_tbl_cue, tbl_pts) {
+    resp_dim <- c("d1i_z", "d2i_z")[!(c("d1i_z", "d2i_z") == i_dim)]
+    response_pt <- tbl_pts %>% 
+      filter(category == i_cat) %>%
+      select(all_of(resp_dim)) %>%
+      as_vector()
+    cues <- l_tbl_cues[[i_cat]]
+    cues[, resp_dim] <- response_pt
+    cues$cue_dim <- i_dim
+    return(cues)
+  }
+  
+  l_closest <- pmap(
+    tbl_cat_dim,
+    closest_response_to_prototype,
+    l_tbl_cue = l_tbl_cues,
+    tbl_pts = tbl_pts
+  )
+  names(l_closest) <- tbl_cat_dim$i_cat
+  
+  return(l_closest)
+}
+
+
+distance_from_model_based_inference <- function(p_id, tbl_completion, tbl_train, l_pars_tf, modeltype) {
   #' compute gcm-based responses and compare them to empirical responses
   #'
   #' @description computes for every 1D inference cue what response GCM would give
@@ -1501,9 +1593,15 @@ distance_from_model_based_inference <- function(p_id, tbl_completion, tbl_train,
   #' @param tbl_completion tbl df with empirical inference data
   #' @param tbl_train tbl df with category learning data from training session
   #' @param l_pars_tf mean and sds in untransformed space
+  #' @param modeltype gcm or gaussian category learning model
   #' @return tbl df with distance as additional column
   #'
-  l_model_based <- model_based_inference_responses(tbl_completion, tbl_train, p_id, l_pars_tf)
+  if (modeltype == "gcm"){
+    l_model_based <- model_based_inference_responses_gcm(tbl_completion, tbl_train, p_id, l_pars_tf)
+  } else if (modeltype == "gaussian") {
+    l_model_based <- model_based_inference_responses_gaussian(tbl_completion, tbl_train, p_id, l_pars_tf)
+  }
+  
   add_category <- function(tbl_df, cat) {
     tbl_df$category <- cat
     return(tbl_df)
@@ -1524,17 +1622,17 @@ distance_from_model_based_inference <- function(p_id, tbl_completion, tbl_train,
   tbl_model_based$cue_val <- pmap_dbl(
     tbl_model_based[, c("d1i", "d2i", "cuedim")], ~ c(..1, ..2)[..3]
   )
-
+  
   # EMPIRICAL
   # join gcm-based responses back into empirical tbl df
-  tbl_gcm <- tbl_model_based %>%
+  tbl_model <- tbl_model_based %>%
     left_join(tbl_completion, by = c("participant", "category", "cuedim", "cue_val"))
   # compute distance from model-based response
-  tbl_gcm$distance <- pmap_dbl(
-    tbl_gcm[, c("d1i", "d2i", "respdim", "resp_i")],
+  tbl_model$distance <- pmap_dbl(
+    tbl_model[, c("d1i", "d2i", "respdim", "resp_i")],
     ~ c(..1, ..2)[..3] - ..4
   )
-
+  
   # LOOKUP TABLE
   tbl_lookup <- lookup_table_possible_responses(tbl_completion, tbl_model_based, p_id)
   # compute distance from model-based response
@@ -1542,23 +1640,23 @@ distance_from_model_based_inference <- function(p_id, tbl_completion, tbl_train,
     tbl_lookup[, c("d1i", "d2i", "respdim", "resp_i")],
     ~ c(..1, ..2)[..3] - ..4
   )
-
+  
   # plot and save histograms by category
   pl <- ggplot(
-    tbl_gcm %>% mutate(category = str_c("Category ", category)), aes(distance)
+    tbl_model %>% mutate(category = str_c("Category ", category)), aes(distance)
   ) +
     geom_histogram(color = "white", fill = "#66CCFF", bins = 15) +
     facet_wrap(~category) +
     theme_bw() +
     labs(
-      x = "Distance from GCM-Based Response",
+      x = str_c("Distance from ", modeltype,"-Based Response"),
       y = "Nr. Responses",
       title = str_c("Participant = ", p_id)
     )
-  f_name_pl <- str_c("data/infpro_task-cat_beh/figures/ds-gcm-based-p-", p_id, ".png")
+  f_name_pl <- str_c("data/infpro_task-cat_beh/figures/ds-", modeltype, "-based-p-", p_id, ".png")
   save_my_png(pl, f_name_pl, c(4, 3))
-
-  return(list(tbl_empirical = tbl_gcm, tbl_lookup = tbl_lookup))
+  
+  return(list(tbl_empirical = tbl_model, tbl_lookup = tbl_lookup))
 }
 
 
@@ -1586,6 +1684,6 @@ lookup_table_possible_responses <- function(tbl_completion, tbl_model_based, p_i
   tbl_design <- tbl_design %>% left_join(tbl_cues, by = "cue_val")
   tbl_lookup <- tbl_model_based %>%
     left_join(tbl_design, by = c("participant", "category", "cuedim", "cue_val"))
-
+  
   return(tbl_lookup)
 }
