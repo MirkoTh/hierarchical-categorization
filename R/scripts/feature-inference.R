@@ -105,19 +105,25 @@ plan(multisession, workers = n_workers_available - 2)
 safe_distances <- safely(distance_from_model_based_inference)
 
 p_ids <- sort(unique(tbl_completion_prep$participant))
-l_results <- future_map(
+
+
+# GCM ---------------------------------------------------------------------
+
+
+l_results_gcm <- future_map(
   p_ids, 
   safe_distances, 
   tbl_completion = tbl_completion, 
   tbl_train = tbl_train, 
   l_pars_tf = l_pars_tf,
+  modeltype = "gcm",
   .progress = TRUE
 )
 
 # ok
-l_gcm_results <- map(l_results, "result")
+l_gcm_results <- map(l_results_gcm, "result")
 # not ok
-map(l_results, "error") %>% reduce(c)
+map(l_results_gcm, "error") %>% reduce(c)
 saveRDS(l_gcm_results, file = "data/infpro_task-cat_beh/inference-gcm-based.RDS")
 
 tbl_gcm_results <- map(l_gcm_results, "tbl_empirical") %>% reduce(rbind)
@@ -131,8 +137,6 @@ tbl_gcm_results <- tbl_gcm_results %>%
     tbl_completion %>% rename(distance_pt_phys = distance) %>% select(-resp_i),
     by = c("participant", "category", "rep", "cuedim", "cue_val", "respdim")
     )
-
-
 
 tbl_gcm_results %>% 
   mutate(distance = abs(distance)) %>%
@@ -203,3 +207,74 @@ tbl_c %>% pivot_longer(-trial_id) %>%
   ggplot(aes(value)) +
   geom_histogram(color = "white", fill = "dodgerblue") +
   facet_wrap(~ name)
+
+
+
+
+
+# Gaussian Prototype ------------------------------------------------------
+
+l_results_gaussian <- future_map(
+  p_ids, 
+  safe_distances, 
+  tbl_completion = tbl_completion, 
+  tbl_train = tbl_train, 
+  l_pars_tf = l_pars_tf,
+  modeltype = "gaussian",
+  .progress = TRUE
+)
+
+# ok
+l_gaussian_results <- map(l_results_gaussian, "result")
+# not ok
+map(l_results_gaussian, "error") %>% reduce(c)
+saveRDS(l_gaussian_results, file = "data/infpro_task-cat_beh/inference-gaussian-based.RDS")
+
+
+# do a few checks
+p_id <- 101
+l_posteriors <- load_parameter_posteriors(p_id)
+post_gaussian <- l_posteriors$gaussian
+post_gaussian <- post_gaussian %>% rename(`mu2[1]` = `mu2[3]`, `mu2[3]` = `mu2[1]`) %>% select(-c(.chain, .iteration, .draw, `mu1[2]`, `mu2[2]`))
+post_gaussian_mns <- apply(post_gaussian, 2, mean)
+post_gaussian_mns * 2.72 + 5.5
+
+tbl_gaussian_results <- map(l_gaussian_results, "tbl_empirical") %>% reduce(rbind)
+tbl_gaussian_results <- tbl_gaussian_results %>%
+  arrange(rep, participant, cue_val, cuedim)
+tbl_completion <- tbl_completion %>%
+  arrange(rep, participant, cue_val, cuedim)
+
+tbl_gaussian_results <- tbl_gaussian_results %>% 
+  left_join(
+    tbl_completion %>% rename(distance_pt_phys = distance) %>% select(-resp_i),
+    by = c("participant", "category", "rep", "cuedim", "cue_val", "respdim")
+  )
+
+
+
+tbl_gaussian_results %>% 
+  mutate(distance = abs(distance)) %>%
+  rename(Gaussian = distance, `Physical PT` = distance_pt_phys) %>%
+  pivot_longer(c(Gaussian, `Physical PT`)) %>% 
+  ggplot(aes(value, group = name)) +
+  geom_density(aes(color = name)) +
+  theme_bw() +
+  scale_color_brewer(palette = "Set1", name = "Model") +
+  labs(x = "Distance", y = "Density")
+
+tbl_gaussian_results %>% 
+  rename(Gaussian = distance) %>%
+  ggplot(aes(Gaussian)) +
+  geom_density() +
+  theme_bw() +
+  scale_color_brewer(palette = "Set1", name = "Model") +
+  labs(x = "Distance", y = "Density")
+
+ggplot(tbl_gaussian_results %>% filter(category == "A"), aes(resp_i, group = cuedim)) +
+  geom_density() +
+  facet_grid(cuedim ~ cue_val)
+
+
+tbl_lookup <- map(l_gaussian_results, "tbl_lookup") %>% reduce(rbind)
+write.csv(tbl_lookup, "data/infpro_task-cat_beh/gaussian-inference-distances.csv")
