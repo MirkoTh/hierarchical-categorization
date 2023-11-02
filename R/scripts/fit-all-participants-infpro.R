@@ -57,6 +57,10 @@ write_csv(tbl_train, "data/infpro_task-cat_beh/tbl_train.csv")
 write_csv(tbl_transfer, "data/infpro_task-cat_beh/tbl_transfer.csv")
 
 
+write_csv(tbl_train, file = "data/infpro_task-cat_beh/tbl_train.csv")
+write_csv(tbl_transfer, file = "data/infpro_task-cat_beh/tbl_transfer.csv")
+write_csv(tbl_both, file = "data/infpro_task-cat_beh/tbl_both.csv")
+
 tbl_stim_id <- tbl_train %>% count(d1i, d2i, d1i_z, d2i_z, category) %>%
   arrange(d1i, d2i) %>% mutate(stim_id = seq_along(d1i + d2i)) %>%
   dplyr::select(-n)
@@ -442,3 +446,39 @@ tbl_biases %>%
   facet_wrap(~ variable) +
   theme_bw()
 
+
+
+
+# Compare Model Weights to c Parameter of RMC -----------------------------
+
+tbl_rmc <- read_csv("data/infpro_task-cat_beh/tbl-results-transfer.csv")
+tbl_cs <- tbl_rmc %>% filter(rank == 1) %>% mutate(participant = as.character(id))
+
+
+tbl_cs <- tbl_cs %>% left_join(tbl_weights, by = "participant")
+tbl_labels = tibble(
+  Metric = c("c", "nk"), 
+  Value = c(.55, 105), 
+  c = c(cor(tbl_cs$c, tbl_cs$weight_prototype), cor(tbl_cs$nk, tbl_cs$weight_prototype))
+)
+
+tbl_cs_long <- tbl_cs %>% 
+  pivot_longer(cols = c(c, nk), names_to = "Metric", values_to = "Value")
+
+ggplot(tbl_cs_long, aes(weight_prototype, Value, group = Metric)) +
+  geom_point(aes(color = Metric)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = .1, aes(color = Metric)) +
+  geom_label(data = tbl_labels, aes(x = .75, label = str_c("r = ", round(c, 2)))) +
+  facet_wrap(~ Metric, scales = "free_y") +
+  scale_color_viridis_d() +
+  theme_bw() +
+  labs(x = "Model Weight Prototype", y = "RMC Metric")
+
+
+ggplot(tbl_cs, aes(c)) + 
+  geom_histogram(binwidth = .015, fill = "#66CCFF", color = "white") +
+  theme_bw() +
+  scale_y_continuous(breaks = seq(0, 15, by = 5)) +
+  labs(x = "c parameter of RMC", y = "Nr. Participants") +
+  coord_cartesian(xlim = c(0, 1))
+  
