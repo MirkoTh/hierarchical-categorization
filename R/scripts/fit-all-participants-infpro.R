@@ -105,10 +105,25 @@ tbl_train_agg_overall <- tbl_train_agg %>%
   ) %>%
   mutate(prop_responses = n_responses / n_trials)
 
+tbl_transfer_agg_overall <- tbl_transfer_agg %>%
+  group_by(d1i, d2i, d1i_z, d2i_z, stim_id, category, response) %>%
+  summarize(
+    n_responses = sum(n_responses),
+    n_trials = sum(n_trials)
+  ) %>%
+  mutate(prop_responses = n_responses / n_trials)
+
 # all responses
 participant_sample <- "Average of All"
 plot_proportion_responses(
   tbl_train_agg_overall %>% 
+    mutate(response = str_c("Response = ", response)) %>%
+    filter(prop_responses > .025),
+  participant_sample,
+  facet_by_response = TRUE
+)
+plot_proportion_responses(
+  tbl_transfer_agg_overall %>% 
     mutate(response = str_c("Response = ", response)) %>%
     filter(prop_responses > .025),
   participant_sample,
