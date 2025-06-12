@@ -7,7 +7,7 @@ Two of the used packages cannot be installed from CRAN:
 - First, install cmdstanr using these instructions: https://mc-stan.org/cmdstanr/articles/cmdstanr.html
 - Second, pull the following github repo: https://github.com/MirkoTh/rutils and install the package from source or use the devtool package and install rtools as follows: devtools::install("your-selected-path\\rutils")
 
-Download the files called "infpro_task-cat_beh" and "infpro_task-cat2_beh" provided by the first author of the associated manuscript. Create a folder called "data" on the root level of the project (i.e., /hierarchical-categorization/data) and copy the downloaded files to that folder.
+Download the files called "infpro_task-cat_beh" and "infpro_task-cat2_beh", which are going to be provided by the first author only after acceptance of the associated manuscript at the respective journal. Create a folder called "data" on the root level of the project (i.e., /hierarchical-categorization/data) and copy the downloaded files to that folder.
 
 # Fitting the Two Categorization Models
 
